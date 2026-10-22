@@ -15,8 +15,7 @@ from typing import Union, Optional, List
 
 
 class DataProcessor:
-    """
-    Normalise xarray and pandas data for use in deepsensor models
+    """Normalise xarray and pandas data for use in deepsensor models.
 
     Args:
         folder (str, optional):
@@ -97,10 +96,10 @@ class DataProcessor:
         self.verbose = verbose
 
         # List of valid normalisation method names
-        self.valid_methods = ["mean_std", "min_max"]
+        self.valid_methods = ["mean_std", "min_max", "positive_semidefinite"]
 
     def save(self, folder: str):
-        """Save DataProcessor config to JSON in `folder`"""
+        """Save DataProcessor config to JSON in `folder`."""
         os.makedirs(folder, exist_ok=True)
         fpath = os.path.join(folder, self.config_fname)
         with open(fpath, "w") as f:
@@ -181,8 +180,7 @@ class DataProcessor:
 
     @classmethod
     def load_dask(cls, data: Union[xr.DataArray, xr.Dataset]):
-        """
-        Load dask data into memory.
+        """Load dask data into memory.
 
         Args:
             data (:class:`xarray.DataArray` | :class:`xarray.Dataset`):
@@ -198,8 +196,7 @@ class DataProcessor:
         return data
 
     def set_coord_params(self, time_name, x1_name, x1_map, x2_name, x2_map) -> None:
-        """
-        Set coordinate normalisation params.
+        """Set coordinate normalisation params.
 
         Args:
             time_name:
@@ -226,8 +223,7 @@ class DataProcessor:
         self.config["coords"]["x2"]["map"] = x2_map
 
     def check_params_computed(self, var_ID, method) -> bool:
-        """
-        Check if normalisation params computed for a given variable.
+        """Check if normalisation params computed for a given variable.
 
         Args:
             var_ID:
@@ -249,12 +245,11 @@ class DataProcessor:
         return False
 
     def add_to_config(self, var_ID, **kwargs):
-        """Add `kwargs` to `config` dict for variable `var_ID`"""
+        """Add `kwargs` to `config` dict for variable `var_ID`."""
         self.config[var_ID] = kwargs
 
     def get_config(self, var_ID, data, method=None):
-        """
-        Get pre-computed normalisation params or compute them for variable
+        """Get pre-computed normalisation params or compute them for variable
         ``var_ID``.
 
         .. note::
@@ -293,6 +288,8 @@ class DataProcessor:
                 params = {"mean": float(data.mean()), "std": float(data.std())}
             elif method == "min_max":
                 params = {"min": float(data.min()), "max": float(data.max())}
+            elif method == "positive_semidefinite":
+                params = {"min": float(data.min()), "std": float(data.std())}
             if self.verbose:
                 print(f"Done. {var_ID} {method} params={params}")
             self.add_to_config(
@@ -302,8 +299,7 @@ class DataProcessor:
         return params
 
     def map_coord_array(self, coord_array: np.ndarray, unnorm: bool = False):
-        """
-        Normalise or unnormalise a coordinate array.
+        """Normalise or unnormalise a coordinate array.
 
         Args:
             coord_array (:class:`numpy:numpy.ndarray`):
@@ -320,8 +316,7 @@ class DataProcessor:
         return new_coords
 
     def map_x1_and_x2(self, x1: np.ndarray, x2: np.ndarray, unnorm: bool = False):
-        """
-        Normalise or unnormalise spatial coords in an array.
+        """Normalise or unnormalise spatial coords in an array.
 
         Args:
             x1 (:class:`numpy:numpy.ndarray`):
@@ -352,8 +347,7 @@ class DataProcessor:
         data: Union[xr.DataArray, xr.Dataset, pd.DataFrame, pd.Series],
         unnorm=False,
     ):
-        """
-        Normalise spatial coords in a pandas or xarray object.
+        """Normalise spatial coords in a pandas or xarray object.
 
         Args:
             data (:class:`xarray.DataArray`, :class:`xarray.Dataset`, :class:`pandas.DataFrame`, or :class:`pandas.Series`):
@@ -459,8 +453,7 @@ class DataProcessor:
         unnorm: bool = False,
         add_offset: bool = True,
     ):
-        """
-        Normalise or unnormalise the data values in an xarray, pandas, or
+        """Normalise or unnormalise the data values in an xarray, pandas, or
         numpy object.
 
         Args:
@@ -498,33 +491,25 @@ class DataProcessor:
 
         params = self.get_config(var_ID, data, method)
 
+        # Linear transformation:
+        # - Inverse normalisation: y_unnorm = m * y_norm + c
+        # - Inverse normalisation: y_norm = (1/m) * y_unnorm - c/m
         if method == "mean_std":
-            std = params["std"]
-            mean = params["mean"]
-            if unnorm:
-                scale = std
-                offset = mean
-            else:
-                scale = 1 / std
-                offset = -mean / std
-            data = data * scale
-            if add_offset:
-                data = data + offset
-            return data
-
+            m = params["std"]
+            c = params["mean"]
         elif method == "min_max":
-            minimum = params["min"]
-            maximum = params["max"]
-            if unnorm:
-                scale = (maximum - minimum) / 2
-                offset = (maximum + minimum) / 2
-            else:
-                scale = 2 / (maximum - minimum)
-                offset = -(maximum + minimum) / (maximum - minimum)
-            data = data * scale
-            if add_offset:
-                data = data + offset
-            return data
+            m = (params["max"] - params["min"]) / 2
+            c = (params["max"] + params["min"]) / 2
+        elif method == "positive_semidefinite":
+            m = params["std"]
+            c = params["min"]
+        if not unnorm:
+            c = -c / m
+            m = 1 / m
+        data = data * m
+        if add_offset:
+            data = data + c
+        return data
 
     def map(
         self,
@@ -534,8 +519,7 @@ class DataProcessor:
         unnorm: bool = False,
         assert_computed: bool = False,
     ):
-        """
-        Normalise or unnormalise the data values and coords in an xarray or
+        """Normalise or unnormalise the data values and coords in an xarray or
         pandas object.
 
         Args:
@@ -599,8 +583,7 @@ class DataProcessor:
         pd.DataFrame,
         List[Union[xr.DataArray, xr.Dataset, pd.DataFrame]],
     ]:
-        """
-        Normalise data.
+        """Normalise data.
 
         Args:
             data (:class:`xarray.DataArray` | :class:`xarray.Dataset` | :class:`pandas.DataFrame` | List[:class:`xarray.DataArray` | :class:`xarray.Dataset` | :class:`pandas.DataFrame`]):
@@ -610,6 +593,7 @@ class DataProcessor:
             method (str, optional): Normalisation method. Options include:
                 - "mean_std": Normalise to mean=0 and std=1 (default)
                 - "min_max": Normalise to min=-1 and max=1
+                - "positive_semidefinite": Normalise to min=0 and std=1
 
         Returns:
             :class:`xarray.DataArray` | :class:`xarray.Dataset` | :class:`pandas.DataFrame` | List[:class:`xarray.DataArray` | :class:`xarray.Dataset` | :class:`pandas.DataFrame`]:
@@ -638,8 +622,7 @@ class DataProcessor:
         pd.DataFrame,
         List[Union[xr.DataArray, xr.Dataset, pd.DataFrame]],
     ]:
-        """
-        Unnormalise data.
+        """Unnormalise data.
 
         Args:
             data (:class:`xarray.DataArray` | :class:`xarray.Dataset` | :class:`pandas.DataFrame` | List[:class:`xarray.DataArray` | :class:`xarray.Dataset` | :class:`pandas.DataFrame`]):
@@ -660,8 +643,7 @@ class DataProcessor:
 
 
 def xarray_to_coord_array_normalised(da: Union[xr.Dataset, xr.DataArray]) -> np.ndarray:
-    """
-    Convert xarray to normalised coordinate array.
+    """Convert xarray to normalised coordinate array.
 
     Args:
         da (:class:`xarray.Dataset` | :class:`xarray.DataArray`)
@@ -702,8 +684,7 @@ def process_X_mask_for_X(X_mask: xr.DataArray, X: xr.DataArray) -> xr.DataArray:
 def mask_coord_array_normalised(
     coord_arr: np.ndarray, mask_da: Union[xr.DataArray, xr.Dataset, None]
 ) -> np.ndarray:
-    """
-    Remove points from (2, N) numpy array that are outside gridded xarray
+    """Remove points from (2, N) numpy array that are outside gridded xarray
     boolean mask.
 
     If `coord_arr` is shape `(2, N)`, then `mask_da` is a shape `(N,)` boolean
@@ -728,8 +709,7 @@ def mask_coord_array_normalised(
 
 
 def da1_da2_same_grid(da1: xr.DataArray, da2: xr.DataArray) -> bool:
-    """
-    Check if ``da1`` and ``da2`` are on the same grid.
+    """Check if ``da1`` and ``da2`` are on the same grid.
 
     .. note::
         ``da1`` and ``da2`` are assumed normalised by ``DataProcessor``.
@@ -750,8 +730,7 @@ def da1_da2_same_grid(da1: xr.DataArray, da2: xr.DataArray) -> bool:
 
 
 def interp_da1_to_da2(da1: xr.DataArray, da2: xr.DataArray) -> xr.DataArray:
-    """
-    Interpolate ``da1`` to ``da2``.
+    """Interpolate ``da1`` to ``da2``.
 
     .. note::
         ``da1`` and ``da2`` are assumed normalised by ``DataProcessor``.

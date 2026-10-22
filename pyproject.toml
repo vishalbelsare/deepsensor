@@ -1,3 +1,74 @@
+[build-system]
+requires = ["setuptools>=80", "setuptools-scm[simple]>=9.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deepsensor"
+dynamic = ["version"]
+authors = [
+    {name = "Tom R. Andersson", email="tomandersson3@gmail.com"},
+]
+description = "A Python package for modelling xarray and pandas data with neural processes."
+readme = "README.md"
+license = {text="MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent"
+]
+requires-python = ">=3.9"
+dependencies = [
+    "backends>=1.7.0",
+    "backends-matrix",
+    "dask",
+    "distributed",
+    "gcsfs",
+    "matplotlib",
+    "neuralprocesses>=0.2.7",
+    "numpy",
+    "pandas",
+    "pooch",
+    "pyshp",
+    "seaborn",
+    "tqdm",
+    "xarray",
+    "zarr"
+]
+
+[tool.setuptools]
+packages = ["deepsensor"]
+
+[project.urls]
+Source = "https://github.com/alan-turing-institute/deepsensor"
+Bug_Tracker = "https://github.com/alan-turing-institute/deepsensor/issues"
+
+[project.optional-dependencies]
+torch = ["torch>=2"]
+tf = ["tensorflow", "tensorflow_probability[tf]"]
+dev = [
+    "pre-commit",
+    "ruff",
+]
+docs = [
+    "jupyter-book<2",
+    "matplotlib",
+    "numpy",
+    "sphinx",
+]
+test = [
+    "coveralls",
+    "mypy",
+    "parameterized",
+    "pytest",
+    "pytest-cov",
+    "tox",
+]
+rioxarray = [
+    "rioxarray"
+]
+
+[tool.setuptools.package-data]
+deepsensor = ["py.typed"]
+
 [tool.pytest.ini_options]
 addopts = "--cov=deepsensor"
 testpaths = [
@@ -17,3 +88,19 @@ warn_return_any = true
 warn_unreachable = true
 warn_unused_configs = true
 no_implicit_reexport = true
+
+[tool.ruff]
+exclude = ["tests", "docs", "*.ipynb"]
+lint.select = [
+    "D",
+    "NPY201"
+    ]
+lint.ignore = [
+    "D100", # Missing docstring in public module
+    "D104", # Missing docstring in public package
+    "D105", # Missing docstring in magic method
+    "D107", # Missing docstring in __init__
+    "D205", # 1 blank line required between summary line and description
+    "D417", # Missing argument description in function docstring
+]
+lint.pydocstyle.convention = "google"

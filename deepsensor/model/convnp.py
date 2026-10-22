@@ -1,3 +1,5 @@
+# ruff: noqa: D102
+
 import copy
 import os.path
 import json
@@ -35,20 +37,25 @@ TorchModel = ModuleType("torch.nn", "Module")
 
 
 class ConvNP(DeepSensorModel):
-    """
-    A ConvNP regression probabilistic model.
+    """A Convolutional Neural Process (ConvNP) regression probabilistic model (by default a ConvCNP).
 
     Wraps around the ``neuralprocesses`` package to construct a ConvNP model.
-    See: https://github.com/wesselb/neuralprocesses/blob/main/neuralprocesses/architectures/convgnp.py
+    See: https://github.com/wesselb/neuralprocesses/blob/main/neuralprocesses/architectures/convgnp.py.
+    Init kwargs passed to the `ConvNP` are passed to the `neuralprocesses.construct_convgnp` function
+    and can be used to specify hyperparameters (see parameter list below). In particular, the
+    `likelihood` parameter can be used to specify the likelihood of the model, which dictates
+    whether the model outputs marginal distributions at each target point (a ConvCNP) or a
+    joint Gaussian distribution over all target points (a ConvGNP). By default a ConvCNP
+    with Gaussian likelihoods is constructed.
+
+    Additionally, the ``ConvNP`` can optionally be instantiated with:
+        - a ``DataProcessor`` object to auto-unnormalise the data at inference time with the ``.predict`` method.
+        - a ``TaskLoader`` object to infer sensible default model parameters from the data.
 
     Multiple dispatch is implemented using ``plum`` to allow for re-using the
     model's forward prediction object when computing the logpdf, entropy, etc.
     Alternatively, the model can be run forwards with a ``Task`` object of data
     from the ``TaskLoader``.
-
-    The ``ConvNP`` can optionally be instantiated with:
-        - a ``DataProcessor`` object to auto-unnormalise the data at inference time with the ``.predict`` method.
-        - a ``TaskLoader`` object to infer sensible default model parameters from the data.
 
     Many of the ``ConvNP`` class methods utilise multiple dispatch so that they
     can either be run with a ``Task`` object or a ``neuralprocesses`` distribution
@@ -92,8 +99,9 @@ class ConvNP(DeepSensorModel):
             per 1x1 unit square). Defaults to 100.
         likelihood (str, optional):
             Likelihood. Must be one of ``"cnp"`` (equivalently ``"het"``),
-            ``"gnp"`` (equivalently ``"lowrank"``), or ``"cnp-spikes-beta"``
-            (equivalently ``"spikes-beta"``). Defaults to ``"cnp"``.
+            ``"gnp"`` (equivalently ``"lowrank"``), ``"cnp-spikes-beta"``,
+            (equivalently ``"spikes-beta"``) or "bernoulli-gamma".
+            Defaults to ``"cnp"``.
         dim_x (int, optional):
             Dimensionality of the inputs. Defaults to 1.
         dim_y (int, optional):
@@ -161,8 +169,7 @@ class ConvNP(DeepSensorModel):
 
     @dispatch
     def __init__(self, *args, **kwargs):
-        """
-        Generate a new model using ``construct_neural_process`` with default or
+        """Generate a new model using ``construct_neural_process`` with default or
         specified parameters.
 
         This method does not take a ``TaskLoader`` or ``DataProcessor`` object,
@@ -181,8 +188,7 @@ class ConvNP(DeepSensorModel):
         verbose: bool = True,
         **kwargs,
     ):
-        """
-        Instantiate model from TaskLoader, using data to infer model parameters
+        """Instantiate model from TaskLoader, using data to infer model parameters
         (unless overridden).
 
         Args:
@@ -242,8 +248,7 @@ class ConvNP(DeepSensorModel):
         task_loader: TaskLoader,
         neural_process: Union[TFModel, TorchModel],
     ):
-        """
-        Instantiate with a pre-defined neural process model.
+        """Instantiate with a pre-defined neural process model.
 
         Args:
             data_processor (:class:`~.data.processor.DataProcessor`):
@@ -293,9 +298,7 @@ class ConvNP(DeepSensorModel):
         self._set_num_mixture_components()
 
     def _set_num_mixture_components(self):
-        """
-        Set the number of mixture components for the model based on the likelihood.
-        """
+        """Set the number of mixture components for the model based on the likelihood."""
         if self.config["likelihood"] in ["spikes-beta"]:
             self.N_mixture_components = 3
         elif self.config["likelihood"] in ["bernoulli-gamma"]:
@@ -304,8 +307,7 @@ class ConvNP(DeepSensorModel):
             self.N_mixture_components = 1
 
     def save(self, model_ID: str):
-        """
-        Save the model weights and config to a folder.
+        """Save the model weights and config to a folder.
 
         Args:
             model_ID (str):
@@ -330,8 +332,7 @@ class ConvNP(DeepSensorModel):
             json.dump(self.config, f, indent=4, sort_keys=False)
 
     def load(self, model_ID: str):
-        """
-        Load a model from a folder containing model weights and config.
+        """Load a model from a folder containing model weights and config.
 
         Args:
             model_ID (str):
@@ -364,8 +365,7 @@ class ConvNP(DeepSensorModel):
 
     @classmethod
     def modify_task(cls, task: Task):
-        """
-        Cast numpy arrays to TensorFlow or PyTorch tensors, add batch dim, and
+        """Cast numpy arrays to TensorFlow or PyTorch tensors, add batch dim, and
         mask NaNs.
 
         Args:
@@ -375,7 +375,6 @@ class ConvNP(DeepSensorModel):
         Returns:
             ...: ...
         """
-
         if "batch_dim" not in task["ops"]:
             task = task.add_batch_dim()
         if "float32" not in task["ops"]:
@@ -390,8 +389,7 @@ class ConvNP(DeepSensorModel):
         return task
 
     def __call__(self, task, n_samples=10, requires_grad=False):
-        """
-        Compute ConvNP distribution.
+        """Compute ConvNP distribution.
 
         Args:
             task (:class:`~.data.task.Task`):
@@ -413,7 +411,7 @@ class ConvNP(DeepSensorModel):
         x: Union[B.Numeric, List[B.Numeric]],
         squeeze_axes: List[int] = (0, 1),
     ):
-        """TODO docstring"""
+        """TODO docstring."""
         if isinstance(x, backend.nps.Aggregate):
             return [np.squeeze(B.to_numpy(xi), axis=squeeze_axes) for xi in x]
         else:
@@ -424,8 +422,7 @@ class ConvNP(DeepSensorModel):
         x: Union[np.ndarray, List[np.ndarray]],
         concat_axis: int = 0,
     ) -> Union[np.ndarray, List[np.ndarray]]:
-        """
-        Concatenate multiple target sets into a single tensor along feature dimension
+        """Concatenate multiple target sets into a single tensor along feature dimension
         and remove size-1 dimensions.
 
         Args:
@@ -462,8 +459,7 @@ class ConvNP(DeepSensorModel):
 
     @dispatch
     def mean(self, task: Task):
-        """
-        Mean values of model's distribution at target locations in task.
+        """Mean values of model's distribution at target locations in task.
 
         Returned numpy arrays have shape ``(N_features, *N_targets)``.
 
@@ -486,8 +482,7 @@ class ConvNP(DeepSensorModel):
 
     @dispatch
     def variance(self, task: Task):
-        """
-        Variance values of model's distribution at target locations in task.
+        """Variance values of model's distribution at target locations in task.
 
         Returned numpy arrays have shape ``(N_features, *N_targets)``.
 
@@ -512,8 +507,7 @@ class ConvNP(DeepSensorModel):
 
     @dispatch
     def std(self, task: Task):
-        """
-        Standard deviation values of model's distribution at target locations in task.
+        """Standard deviation values of model's distribution at target locations in task.
 
         Returned numpy arrays have shape ``(N_features, *N_targets)``.
 
@@ -532,10 +526,10 @@ class ConvNP(DeepSensorModel):
     def alpha(
         self, dist: AbstractMultiOutputDistribution
     ) -> Union[np.ndarray, List[np.ndarray]]:
-        if self.config["likelihood"] not in ["spikes-beta", "bernoulli-gamma"]:
+        if self.config["likelihood"] not in ["spikes-beta"]:
             raise NotImplementedError(
                 f"ConvNP.alpha method not supported for likelihood {self.config['likelihood']}. "
-                f"Try changing the likelihood to a mixture model, e.g. 'spikes-beta' or 'bernoulli-gamma'."
+                f"Valid likelihoods: 'spikes-beta'."
             )
         alpha = dist.slab.alpha
         alpha = self._cast_numpy_and_squeeze(alpha)
@@ -543,8 +537,7 @@ class ConvNP(DeepSensorModel):
 
     @dispatch
     def alpha(self, task: Task) -> Union[np.ndarray, List[np.ndarray]]:
-        """
-        Alpha parameter values of model's distribution at target locations in task.
+        """Alpha parameter values of model's distribution at target locations in task.
 
         Returned numpy arrays have shape ``(N_features, *N_targets)``.
 
@@ -569,10 +562,10 @@ class ConvNP(DeepSensorModel):
     def beta(
         self, dist: AbstractMultiOutputDistribution
     ) -> Union[np.ndarray, List[np.ndarray]]:
-        if self.config["likelihood"] not in ["spikes-beta", "bernoulli-gamma"]:
+        if self.config["likelihood"] not in ["spikes-beta"]:
             raise NotImplementedError(
                 f"ConvNP.beta method not supported for likelihood {self.config['likelihood']}. "
-                f"Try changing the likelihood to a mixture model, e.g. 'spikes-beta' or 'bernoulli-gamma'."
+                f"Valid likelihoods: 'spikes-beta'."
             )
         beta = dist.slab.beta
         beta = self._cast_numpy_and_squeeze(beta)
@@ -580,8 +573,7 @@ class ConvNP(DeepSensorModel):
 
     @dispatch
     def beta(self, task: Task) -> Union[np.ndarray, List[np.ndarray]]:
-        """
-        Beta values of model's distribution at target locations in task.
+        """Beta values of model's distribution at target locations in task.
 
         Returned numpy arrays have shape ``(N_features, *N_targets)``.
 
@@ -602,6 +594,78 @@ class ConvNP(DeepSensorModel):
         return self.beta(dist)
 
     @dispatch
+    def k(
+        self, dist: AbstractMultiOutputDistribution
+    ) -> Union[np.ndarray, List[np.ndarray]]:
+        if self.config["likelihood"] not in ["bernoulli-gamma"]:
+            raise NotImplementedError(
+                f"ConvNP.k method not supported for likelihood {self.config['likelihood']}. "
+                f"Valid likelihoods: 'bernoulli-gamma'."
+            )
+        k = dist.slab.k
+        k = self._cast_numpy_and_squeeze(k)
+        return self._maybe_concat_multi_targets(k)
+
+    @dispatch
+    def k(self, task: Task) -> Union[np.ndarray, List[np.ndarray]]:
+        """K parameter values of model's distribution at target locations in task.
+
+        Returned numpy arrays have shape ``(N_features, *N_targets)``.
+
+        .. note::
+            This method only works for models that return a distribution with
+            a ``dist.slab.k`` attribute, e.g. models with a Beta or
+            Bernoulli-Gamma likelihood, where it returns the k values of
+            the slab component of the mixture model.
+
+        Args:
+            task (:class:`~.data.task.Task`):
+                The task containing the context and target data.
+
+        Returns:
+            :class:`numpy:numpy.ndarray` | List[:class:`numpy:numpy.ndarray`]:
+                k values.
+        """
+        dist = self(task)
+        return self.k(dist)
+
+    @dispatch
+    def scale(
+        self, dist: AbstractMultiOutputDistribution
+    ) -> Union[np.ndarray, List[np.ndarray]]:
+        if self.config["likelihood"] not in ["bernoulli-gamma"]:
+            raise NotImplementedError(
+                f"ConvNP.scale method not supported for likelihood {self.config['likelihood']}. "
+                f"Valid likelihoods: 'bernoulli-gamma'."
+            )
+        scale = dist.slab.scale
+        scale = self._cast_numpy_and_squeeze(scale)
+        return self._maybe_concat_multi_targets(scale)
+
+    @dispatch
+    def scale(self, task: Task) -> Union[np.ndarray, List[np.ndarray]]:
+        """Scale parameter values of model's distribution at target locations in task.
+
+        Returned numpy arrays have shape ``(N_features, *N_targets)``.
+
+        .. note::
+            This method only works for models that return a distribution with
+            a ``dist.slab.scale`` attribute, e.g. models with a Beta or
+            Bernoulli-Gamma likelihood, where it returns the scale values of
+            the slab component of the mixture model.
+
+        Args:
+            task (:class:`~.data.task.Task`):
+                The task containing the context and target data.
+
+        Returns:
+            :class:`numpy:numpy.ndarray` | List[:class:`numpy:numpy.ndarray`]:
+                Scale values.
+        """
+        dist = self(task)
+        return self.scale(dist)
+
+    @dispatch
     def mixture_probs(self, dist: AbstractMultiOutputDistribution):
         if self.N_mixture_components == 1:
             raise NotImplementedError(
@@ -618,8 +682,7 @@ class ConvNP(DeepSensorModel):
 
     @dispatch
     def mixture_probs(self, task: Task):
-        """
-        Mixture probabilities of model's distribution at target locations in task.
+        """Mixture probabilities of model's distribution at target locations in task.
 
         Returned numpy arrays have shape ``(N_components, N_features, *N_targets)``.
 
@@ -640,8 +703,7 @@ class ConvNP(DeepSensorModel):
 
     @dispatch
     def covariance(self, task: Task):
-        """
-        ...
+        """...
 
         Args:
             task (:class:`~.data.task.Task`):
@@ -669,8 +731,7 @@ class ConvNP(DeepSensorModel):
 
     @dispatch
     def sample(self, task: Task, n_samples: int = 1):
-        """
-        Create samples from a ConvNP distribution.
+        """Create samples from a ConvNP distribution.
 
         Returned numpy arrays have shape ``(N_samples, N_features, *N_targets)``,
 
@@ -690,8 +751,7 @@ class ConvNP(DeepSensorModel):
 
     @dispatch
     def slice_diag(self, task: Task):
-        """
-        Slice out the ConvCNP part of the ConvNP distribution.
+        """Slice out the ConvCNP part of the ConvNP distribution.
 
         Args:
             task (:class:`~.data.task.Task`):
@@ -714,8 +774,7 @@ class ConvNP(DeepSensorModel):
 
     @dispatch
     def slice_diag(self, dist: AbstractMultiOutputDistribution):
-        """
-        Slice out the ConvCNP part of the ConvNP distribution.
+        """Slice out the ConvCNP part of the ConvNP distribution.
 
         Args:
             dist (neuralprocesses.dist.AbstractMultiOutputDistribution):
@@ -737,8 +796,7 @@ class ConvNP(DeepSensorModel):
 
     @dispatch
     def mean_marginal_entropy(self, dist: AbstractMultiOutputDistribution):
-        """
-        Mean marginal entropy over target points given context points.
+        """Mean marginal entropy over target points given context points.
 
         Args:
             dist (neuralprocesses.dist.AbstractMultiOutputDistribution):
@@ -752,8 +810,7 @@ class ConvNP(DeepSensorModel):
 
     @dispatch
     def mean_marginal_entropy(self, task: Task):
-        """
-        Mean marginal entropy over target points given context points.
+        """Mean marginal entropy over target points given context points.
 
         Args:
             task (:class:`~.data.task.Task`):
@@ -767,8 +824,7 @@ class ConvNP(DeepSensorModel):
 
     @dispatch
     def joint_entropy(self, dist: AbstractMultiOutputDistribution):
-        """
-        Model entropy over target points given context points.
+        """Model entropy over target points given context points.
 
         Args:
             dist (neuralprocesses.dist.AbstractMultiOutputDistribution):
@@ -781,8 +837,7 @@ class ConvNP(DeepSensorModel):
 
     @dispatch
     def joint_entropy(self, task: Task):
-        """
-        Model entropy over target points given context points.
+        """Model entropy over target points given context points.
 
         Args:
             task (:class:`~.data.task.Task`):
@@ -795,8 +850,7 @@ class ConvNP(DeepSensorModel):
 
     @dispatch
     def logpdf(self, dist: AbstractMultiOutputDistribution, task: Task):
-        """
-        Joint logpdf over all target sets.
+        """Joint logpdf over all target sets.
 
         .. note::
             If the model has multiple target sets, the returned logpdf is the
@@ -819,8 +873,7 @@ class ConvNP(DeepSensorModel):
 
     @dispatch
     def logpdf(self, task: Task):
-        """
-        Joint logpdf over all target sets.
+        """Joint logpdf over all target sets.
 
         .. note::
             If the model has multiple target sets, the returned logpdf is the
@@ -843,8 +896,7 @@ class ConvNP(DeepSensorModel):
         num_lv_samples: int = 8,
         normalise: bool = False,
     ):
-        """
-        Compute the loss of a task.
+        """Compute the loss of a task.
 
         Args:
             task (:class:`~.data.task.Task`):
@@ -889,8 +941,7 @@ class ConvNP(DeepSensorModel):
         ar_subsample_factor: int = 1,
         fill_type: Literal["mean", "sample"] = "mean",
     ):
-        """
-        Autoregressive sampling from the model.
+        """Autoregressive sampling from the model.
 
         AR sampling with optional functionality to only draw AR samples over a
         subset of the target set and then infill the rest of the sample with
@@ -1005,6 +1056,13 @@ class ConvNP(DeepSensorModel):
 
 
 def concat_tasks(tasks: List[Task], multiple: int = 1) -> Task:
+    """Concatenate a list of tasks into a single task containing multiple batches.
+
+    ```{warning}
+    `concat_tasks` has been moved to deepsensor.data.task and will be removed from "
+        "deepsensor.model.convnp in a future release.
+    ```
+    """
     warnings.warn(
         "concat_tasks has been moved to deepsensor.data.task and will be removed from "
         "deepsensor.model.convnp in a future release.",

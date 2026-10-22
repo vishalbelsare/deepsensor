@@ -25,10 +25,9 @@ def get_ghcnd_station_data(
     cache: bool = False,
     cache_dir: str = ".datacache",
 ) -> pd.DataFrame:  # pragma: no cover
-    """
-    Download Global Historical Climatology Network Daily (GHCND) station data from NOAA
+    """Download Global Historical Climatology Network Daily (GHCND) station data from NOAA
     into a pandas DataFrame.
-    Source: https://www.ncei.noaa.gov/products/land-based-station/global-historical-climatology-network-daily
+    Source: https://www.ncei.noaa.gov/products/land-based-station/global-historical-climatology-network-daily.
 
     .. note::
         Requires the `scotthosking/get-station-data` repository to be installed
@@ -164,14 +163,13 @@ def get_era5_reanalysis_data(
     extent: Union[Tuple[float, float, float, float], str] = "global",
     date_range: Optional[Tuple[str, str]] = None,
     freq: str = "D",
-    num_processes: Optional[int] = None,
+    num_processes: Optional[int] = 1,
     verbose: bool = False,
     cache: bool = False,
     cache_dir: str = ".datacache",
 ) -> xr.Dataset:  # pragma: no cover
-    """
-    Download ERA5 reanalysis data from Google Cloud Storage into an xarray Dataset.
-    Source: https://cloud.google.com/storage/docs/public-datasets/era5
+    """Download ERA5 reanalysis data from Google Cloud Storage into an xarray Dataset.
+    Source: https://cloud.google.com/storage/docs/public-datasets/era5.
 
     Supports parallelising downloads into monthly chunks across multiple CPUs.
     Supports caching the downloaded data locally to avoid re-downloading when calling
@@ -205,9 +203,9 @@ def get_era5_reanalysis_data(
             Frequency of data to download. Options are: "D" (daily) or "H" (hourly).
             If "D", the data is downloaded from the 1-hourly dataset and then resampled
             to daily averages. If "H", the 1-hourly data is returned as-is.
-        num_processes (Optional[int], optional):
+        num_processes Optional[int]:
             Number of CPUs to use for downloading years of ERA5 data in parallel.
-            Defaults to 75% of all available CPUs or 8 CPUs, whichever is smaller.
+            Defaults to 1 (i.e. no parallelisation). 75% of all available CPUs or 8 CPUs, whichever is smaller.
         verbose: bool
             Whether to print status messages. Default is ``False``.
         cache: bool
@@ -273,31 +271,44 @@ def get_era5_reanalysis_data(
         num_processes = max(1, int(0.75 * multiprocessing.cpu_count()))
         num_processes = min(num_processes, len(date_ranges))
         num_processes = min(num_processes, max_num_processes)
-        if verbose:
-            print(
-                f"Using {num_processes} CPUs out of {multiprocessing.cpu_count()}... "
-            )
 
-    with multiprocessing.Pool(num_processes) as pool:
-        partial_era5 = partial(
-            _get_era5_reanalysis_data_parallel,
+    if num_processes == 1:
+        # Just download in one go
+        if verbose:
+            print("Downloading ERA5 data without parallelisation... ")
+        era5_da = _get_era5_reanalysis_data_parallel(
+            date_range=date_range,
             var_IDs=var_IDs,
             freq=freq,
             extent=extent,
             cache=cache,
             cache_dir=cache_dir,
         )
-
-        era5_das = list(
-            tqdm.tqdm(
-                pool.imap(partial_era5, date_ranges),
-                total=len(date_ranges),
-                smoothing=0,
-                disable=not verbose,
+    elif num_processes > 1:
+        if verbose:
+            print(
+                f"Using {num_processes} CPUs out of {multiprocessing.cpu_count()}... "
             )
-        )
+        with multiprocessing.Pool(num_processes) as pool:
+            partial_era5 = partial(
+                _get_era5_reanalysis_data_parallel,
+                var_IDs=var_IDs,
+                freq=freq,
+                extent=extent,
+                cache=cache,
+                cache_dir=cache_dir,
+            )
 
-    era5_da = xr.concat(era5_das, dim="time")
+            era5_das = list(
+                tqdm.tqdm(
+                    pool.imap(partial_era5, date_ranges),
+                    total=len(date_ranges),
+                    smoothing=0,
+                    disable=not verbose,
+                )
+            )
+
+        era5_da = xr.concat(era5_das, dim="time")
 
     if verbose:
         print(f"{era5_da.nbytes / 1e9:.2f} GB loaded in {time.time() - tic:.2f} s")
@@ -312,8 +323,7 @@ def _get_era5_reanalysis_data_parallel(
     cache=False,
     cache_dir=".datacache",
 ):  # pragma: no cover
-    """
-    Helper function for downloading ERA5 data in parallel with caching.
+    """Helper function for downloading ERA5 data in parallel with caching.
 
     For documentation, see get_era5_reanalysis_data()
     """
@@ -344,7 +354,12 @@ def _get_era5_reanalysis_data_parallel(
         else:
             raise ValueError(f"Invalid freq: {freq}")
 
-        era5_zarr = xr.open_zarr(source, consolidated=True, chunks={"time": 48})
+        era5_zarr = xr.open_zarr(
+            source,
+            consolidated=True,
+            chunks={"time": 48},
+            storage_options={"token": "anon"},
+        )
         if var_IDs is not None:
             era5_zarr = era5_zarr[var_IDs]
         era5_da = era5_zarr.sel(time=slice(*date_range))
@@ -370,9 +385,8 @@ def get_gldas_land_mask(
     cache: bool = False,
     cache_dir: str = ".datacache",
 ) -> xr.DataArray:  # pragma: no cover
-    """
-    Get GLDAS land mask at 0.25 degree resolution.
-    Source: https://ldas.gsfc.nasa.gov/gldas/vegetation-class-mask
+    """Get GLDAS land mask at 0.25 degree resolution.
+    Source: https://ldas.gsfc.nasa.gov/gldas/vegetation-class-mask.
 
     .. warning::
         If this function is updated, the cache will be invalidated and the data will need
@@ -419,7 +433,7 @@ def get_gldas_land_mask(
         with urllib.request.urlopen(req) as response:
             with open(fname, "wb") as f:
                 f.write(response.read())
-        da = xr.open_dataset(fname)["GLDAS_mask"].isel(time=0).drop("time").load()
+        da = xr.open_dataset(fname)["GLDAS_mask"].isel(time=0).drop_vars("time").load()
 
         if isinstance(extent, str):
             extent = extent_str_to_tuple(extent)
@@ -450,9 +464,8 @@ def get_earthenv_auxiliary_data(
     cache: bool = False,
     cache_dir: str = ".datacache",
 ) -> xr.Dataset:  # pragma: no cover
-    """
-    Download global static auxiliary data from EarthEnv into an xarray DataArray.
-    See: https://www.earthenv.org/topography
+    """Download global static auxiliary data from EarthEnv into an xarray DataArray.
+    See: https://www.earthenv.org/topography.
 
     .. note::
         Requires the `rioxarray` package to be installed. e.g. via ``pip install rioxarray``.
@@ -564,7 +577,7 @@ def get_earthenv_auxiliary_data(
             # Read data
             da = xr.open_dataset(fname).to_array().squeeze().load()
             da = da.rename({"y": "lat", "x": "lon"})
-            da = da.drop(["band", "spatial_ref", "variable"])
+            da = da.drop_vars(["band", "spatial_ref", "variable"])
             da.name = var_ID
             da = da.sel(lat=slice(lat_max, lat_min), lon=slice(lon_min, lon_max))
             da_dict[var_ID] = da

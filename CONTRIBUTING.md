@@ -95,6 +95,20 @@ That is, please do not use the [rebase](https://help.github.com/en/articles/abou
 command to edit previous commit messages, combine multiple commits into one, or delete or revert
 commits that are no longer necessary.
 
+Make sure you're using the developer dependencies.
+If you're working locally on the source code, *before* commiting, please run `pip install .[dev]` to install some useful dependencies just for development.
+This includes `pre-commit` and `ruff` which are used to check and format your code style when you run `git commit`, so that you don't have to.
+
+Using pre-commit:
++ To make this work, just run `pre-commit install` and when you commit, `ruff` will be run to check the style of the files that you've changed.
++ Note, you may find that if `ruff` needs to edit your files, you'll have to run `git add ...` and `git commit ..` again as the pre-commit hook will stop the commit until the changes pass its tests, `ruff` will also have slightly edited the files you added, so you'll need to stage and commit again.
+
+Without pre-commit:
++ Alternatively, you can run `ruff` yourself (without) `pre-commit` by installing `ruff` as above and just running `ruff format`.
+
+You should also run `pytest` and check that your changes don't break any of the existing tests.
+If you've made changes to the source code, you may need to add some tests to make sure that they don't get broken in the future.
+
 #### 4. Open a Pull Request
 
 We encourage you to open a pull request as early in your contributing process as possible.
@@ -137,7 +151,7 @@ One easy way to contribute to the documentation is to provide feedback in [this 
 
 Another way to contribute is to directly edit or add to the documentation and open a PR:
 * Follow all the forking instructions above
-* Install the documentation requirements: `pip install -r requirements/requirements.docs.txt`
+* Install the documentation requirements: `pip install deepsensor[docs]`
 * Option A: Editing a markdown file
   * Simply make your edits!
 * Option B: Editing a jupyter notebook file
@@ -236,6 +250,17 @@ familiarize yourself with our Code of Conduct that lists the expected behaviours
 
 Every contributor is expected to adhere to our Code of Conduct. It outlines our expectations and
 ensures a safe, respectful environment for everyone.
+
+# Maintenance
+
+Note that these instructions are intended for the maintainers of DeepSensor.
+
+## Release Management
+
+1. Bump the version manually in `CITATION.cff`, including the release date.
+1. Draft a new release and create a new tag with the same new version name, e.g. v0.4.3.
+1. Click 'Generate release notes' and it will automatically fill the release notes based on the commit history between HEAD and the previous release. Delete most of the individual commit messages which are way too granular, and replace them with higher-level updates.
+1. Ensure this is set as the new version (which is on by default), and publish the release. You should see the publish action start to run [here](https://github.com/alan-turing-institute/deepsensor/actions/workflows/publish.yml), and when it completes the PyPI server and website will be updated with the new version.
 
 ----
 
